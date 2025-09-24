@@ -2,7 +2,11 @@ pipeline {
     agent any
 
     parameters {
-        booleanParam(name: 'autoApprove', defaultValue: false, description: 'Automatically run apply after generating plan?')
+        booleanParam(
+            name: 'autoApprove', 
+            defaultValue: false, 
+            description: 'Automatically run apply after generating plan?'
+        )
     }
 
     environment {
@@ -11,23 +15,23 @@ pipeline {
     }
 
     tools {
-        terraform 'terraform-1.8.5'   
+        terraform 'terraform-1.13.3'  // 👈 updated version; must match Jenkins Tool name
     }
 
     stages {
         stage('Checkout') {
             steps {
                 dir("terraform") {
-                    git "https://github.com/my-company-org-95/Terraform-Jenkins.git"
+                    git branch: 'main', url: "https://github.com/my-company-org-95/Terraform-Jenkins.git"
                 }
             }
         }
 
-        stage('Plan') {
+        stage('Terraform Init & Plan') {
             steps {
                 dir("terraform") {
-                    sh 'terraform init'
-                    sh 'terraform plan -out=tfplan'
+                    sh 'terraform init -input=false'
+                    sh 'terraform plan -out=tfplan -input=false'
                     sh 'terraform show -no-color tfplan > tfplan.txt'
                 }
             }
@@ -35,17 +39,15 @@ pipeline {
 
         stage('Approval') {
             when {
-                not {
-                    equals expected: true, actual: params.autoApprove
-                }
+                not { equals expected: true, actual: params.autoApprove }
             }
             steps {
                 script {
-                    def plan = readFile 'terraform/tfplan.txt'
+                    def planText = readFile 'terraform/tfplan.txt'
                     input message: "Do you want to apply the plan?",
-                        parameters: [
-                            text(name: 'Plan', description: 'Please review the plan', defaultValue: plan)
-                        ]
+                          parameters: [
+                              text(name: 'Plan', description: 'Please review the plan', defaultValue: planText)
+                          ]
                 }
             }
         }
@@ -56,6 +58,13 @@ pipeline {
                     sh 'terraform apply -input=false tfplan'
                 }
             }
+        }
+    }
+
+    post {
+        always {
+            echo "Pipeline finished. Cleaning workspace."
+            cleanWs()
         }
     }
 }
