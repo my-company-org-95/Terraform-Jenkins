@@ -3,9 +3,9 @@ pipeline {
 
     parameters {
         booleanParam(
-            name: 'autoApprove', 
-            defaultValue: false, 
-            description: 'Automatically run apply after generating plan?'
+            name: 'autoDestroy', 
+            defaultValue: true, 
+            description: 'Automatically destroy Terraform resources without manual approval?'
         )
     }
 
@@ -15,7 +15,7 @@ pipeline {
     }
 
     tools {
-        terraform 'terraform-1.13.3'  // 👈 updated version; must match Jenkins Tool name
+        terraform 'terraform-1.13.3'  // Must match the Jenkins Tool name
     }
 
     stages {
@@ -37,25 +37,14 @@ pipeline {
             }
         }
 
-        stage('Approval') {
+        stage('Destroy') {
             when {
-                not { equals expected: true, actual: params.autoApprove }
+                expression { return params.autoDestroy == true }
             }
-            steps {
-                script {
-                    def planText = readFile 'terraform/tfplan.txt'
-                    input message: "Do you want to apply the plan?",
-                          parameters: [
-                              text(name: 'Plan', description: 'Please review the plan', defaultValue: planText)
-                          ]
-                }
-            }
-        }
-
-        stage('Apply') {
             steps {
                 dir("terraform") {
-                    sh 'terraform destroy -input=false tfplan'
+                    // Destroy without manual input
+                    sh 'terraform destroy -auto-approve'
                 }
             }
         }
